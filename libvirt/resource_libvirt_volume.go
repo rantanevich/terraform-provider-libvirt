@@ -60,6 +60,12 @@ func resourceLibvirtVolume() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
+			"full_clone": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				ForceNew: true,
+			},
 			"xml": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -118,6 +124,10 @@ func resourceLibvirtVolumeCreate(ctx context.Context, d *schema.ResourceData, me
 	givenFormat, isFormatGiven := d.GetOk("format")
 	if isFormatGiven {
 		volumeDef.Target.Format.Type = givenFormat.(string)
+	}
+
+	createVolFn := func(data string) (libvirt.StorageVol, error) {
+		return virConn.StorageVolCreateXML(pool, data, 0)
 	}
 
 	var img image
@@ -224,6 +234,16 @@ be smaller than the backing store specified with
 			}
 			volumeDef.BackingStore = &backingStoreFragmentDef
 		}
+
+		if d.Get("full_clone").(bool) {
+			createVolFn = func(data string) (libvirt.StorageVol, error) {
+				volume, err := virConn.StorageVolCreateXMLFrom(pool, data, baseVolume, 0)
+				if err != nil {
+					return libvirt.StorageVol{}, err
+				}
+				return volume, virConn.StorageVolResize(volume, volumeDef.Capacity.Value, 0)
+			}
+		}
 	}
 
 	data, err := xmlMarshallIndented(volumeDef)
@@ -237,7 +257,7 @@ be smaller than the backing store specified with
 		return diag.Errorf("error applying XSLT stylesheet: %s", err)
 	}
 
-	volume, err := virConn.StorageVolCreateXML(pool, data, 0)
+	volume, err := createVolFn(data)
 	if err != nil {
 		if !isError(err, libvirt.ErrStorageVolExist) {
 			return diag.Errorf("error creating libvirt volume: %s", err)

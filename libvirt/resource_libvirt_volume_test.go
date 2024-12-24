@@ -125,6 +125,49 @@ func TestAccLibvirtVolume_Basic(t *testing.T) {
 	})
 }
 
+func TestAccLibvirtVolume_FullClone(t *testing.T) {
+	var volume libvirt.StorageVol
+	random := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+	randomPoolPath := t.TempDir()
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLibvirtVolumeDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+                resource "libvirt_pool" "%s" {
+                    name = "%s"
+                    type = "dir"
+                    path = "%s"
+                }
+				resource "libvirt_volume" "base-%s" {
+					name = "base-%s"
+					size =  1073741824
+                    pool = "${libvirt_pool.%s.name}"
+				}
+				resource "libvirt_volume" "%s" {
+					name = "%s"
+					base_volume_id = "${libvirt_volume.base-%s.id}"
+                    pool = "${libvirt_pool.%s.name}"
+					size = 53687091200
+			    }
+				`, random, random, randomPoolPath, random, random, random, random, random, random, random),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLibvirtVolumeExists("libvirt_volume.base-"+random, &volume),
+					testAccCheckLibvirtVolumeExists("libvirt_volume."+random, &volume),
+					resource.TestCheckResourceAttr(
+						"libvirt_volume.base-"+random, "size", "1073741824",
+					),
+					resource.TestCheckResourceAttr(
+						"libvirt_volume."+random, "size", "53687091200",
+					),
+				),
+			},
+		},
+	})
+}
+
 func TestAccLibvirtVolume_BackingStoreTestByID(t *testing.T) {
 	var volume libvirt.StorageVol
 	random := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)

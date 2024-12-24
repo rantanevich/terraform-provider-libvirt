@@ -64,6 +64,7 @@ The following arguments are supported:
   volume is going to be searched inside of `pool`.
 * `base_volume_pool` - (Optional) The name of the storage pool containing the
   volume defined by `base_volume_name`.
+* `full_clone` - (Optional) Set to `true` to create a full copy of the backing volume.
 
 ### Altering libvirt's generated volume XML definition
 
